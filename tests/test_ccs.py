@@ -152,6 +152,21 @@ class CcsTest(unittest.TestCase):
         self.assertEqual(self.run_ccs("import-orca").returncode, 0)
         self.assertEqual(sorted(p.name for p in self.store.iterdir() if not p.name.startswith(".")), ["alpha", "beta"])
 
+    def test_import_orca_includes_system_default_snapshot(self):
+        runtime = self.home / ".config" / "orca" / "claude-runtime-auth"
+        runtime.mkdir(parents=True)
+        (runtime / "system-default-auth.json").write_text(json.dumps({
+            "credentialsJson": json.dumps(creds("s1")),
+            "configOauthAccount": account("uuid-s", "boss@company.com"),
+            "capturedAt": 1,
+        }))
+        result = self.run_ccs("import-orca")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads((self.store / "boss" / "credentials.json").read_text()), creds("s1"))
+        self.assertEqual(json.loads((self.store / "boss" / "account.json").read_text())["accountUuid"], "uuid-s")
+        self.assertEqual(self.run_ccs("import-orca").returncode, 0)
+        self.assertEqual(sorted(p.name for p in self.store.iterdir() if not p.name.startswith(".")), ["boss"])
+
     def test_respects_claude_config_dir(self):
         custom = self.home / "custom"
         custom.mkdir()

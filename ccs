@@ -57,6 +57,10 @@ def orca_accounts_dir() -> Path:
     return home() / ".config" / "orca" / "claude-accounts"
 
 
+def orca_system_default_snapshot() -> Path:
+    return home() / ".config" / "orca" / "claude-runtime-auth" / "system-default-auth.json"
+
+
 # --- io helpers ------------------------------------------------------------
 def read_json(path: Path):
     try:
@@ -263,16 +267,27 @@ def cmd_remove(args) -> int:
     return 0
 
 
+def orca_candidates():
+    """Yield (credentials, oauthAccount) for every login Orca keeps on disk."""
+    for auth in sorted(orca_accounts_dir().glob("*/auth")):
+        yield read_json(auth / ".credentials.json"), read_json(auth / "oauth-account.json")
+    # Copy-based switching snapshots the original login it replaced ("System default").
+    snapshot = read_json(orca_system_default_snapshot()) or {}
+    raw = snapshot.get("credentialsJson")
+    if raw:
+        try:
+            yield json.loads(raw), snapshot.get("configOauthAccount")
+        except json.JSONDecodeError:
+            print("ccs: skipping unreadable Orca System default snapshot.", file=sys.stderr)
+
+
 def cmd_import_orca(_args) -> int:
-    source = orca_accounts_dir()
-    if not source.is_dir():
-        raise CcsError(f"no Orca accounts found in {source}.")
+    if not orca_accounts_dir().is_dir() and not orca_system_default_snapshot().exists():
+        raise CcsError(f"no Orca accounts found in {orca_accounts_dir().parent}.")
     active = live_uuid()
     imported = 0
     with store_lock():
-        for auth in sorted(source.glob("*/auth")):
-            oauth_account = read_json(auth / "oauth-account.json")
-            credentials = read_json(auth / ".credentials.json")
+        for credentials, oauth_account in orca_candidates():
             if not oauth_account or not credentials or not oauth_account.get("accountUuid"):
                 continue
             uuid = oauth_account["accountUuid"]

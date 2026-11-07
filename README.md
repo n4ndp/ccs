@@ -43,7 +43,7 @@ If `CLAUDE_CONFIG_DIR` is set, `ccs` uses `$CLAUDE_CONFIG_DIR/.credentials.json`
 | `ccs save <name>` | Save the currently logged-in account as `<name>` |
 | `ccs use <name>` | Make `<name>` the active account |
 | `ccs remove <name>` | Forget a saved account (the live login is untouched) |
-| `ccs import-orca` | Import accounts saved by the Orca app (`~/.config/orca/claude-accounts`) |
+| `ccs import-orca` | Import accounts saved by the Orca app: `~/.config/orca/claude-accounts` plus the original "System default" login Orca snapshotted in `claude-runtime-auth/system-default-auth.json` |
 
 ## Install
 
