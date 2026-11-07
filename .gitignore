@@ -10,3 +10,6 @@ account.json
 /dist/
 
 .codegraph/
+
+# Local agent task notes
+odd/
