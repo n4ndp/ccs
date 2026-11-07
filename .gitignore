@@ -4,6 +4,9 @@
 .claude-accounts/
 credentials.json
 account.json
-__pycache__/
-*.pyc
+
+# Build output
+/ccs
+/dist/
+
 .codegraph/

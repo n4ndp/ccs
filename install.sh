@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
-# Install ccs by linking it into ~/.local/bin (or $CCS_BIN_DIR). Safe to re-run.
+# Build ccs and install the binary into ~/.local/bin (or $CCS_BIN_DIR). Safe to re-run.
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bin_dir="${CCS_BIN_DIR:-$HOME/.local/bin}"
+target="$bin_dir/ccs"
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "ccs: python3 is required but was not found." >&2
-  exit 1
-fi
-if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)'; then
-  echo "ccs: python3 >= 3.8 is required." >&2
+if ! command -v go >/dev/null 2>&1; then
+  echo "ccs: Go >= 1.24 is required to build (https://go.dev/dl/)." >&2
   exit 1
 fi
 
-chmod +x "$repo_dir/ccs"
+version="$(git -C "$repo_dir" describe --tags --always --dirty 2>/dev/null || echo dev)"
 mkdir -p "$bin_dir"
-ln -sfn "$repo_dir/ccs" "$bin_dir/ccs"
-echo "Linked $bin_dir/ccs -> $repo_dir/ccs"
+# An older install linked the Python script here; never build through a symlink.
+if [ -L "$target" ]; then
+  rm -f "$target"
+fi
+
+(cd "$repo_dir" && go build -trimpath \
+  -ldflags "-s -w -X github.com/n4ndp/ccs/internal/cli.Version=$version" \
+  -o "$target" .)
+echo "Installed $target ($version)"
 
 case ":$PATH:" in
   *":$bin_dir:"*) ;;
@@ -25,4 +29,9 @@ case ":$PATH:" in
      echo "  export PATH=\"$bin_dir:\$PATH\"" ;;
 esac
 
-"$bin_dir/ccs" --version
+shell_name="$(basename "${SHELL:-}")"
+case "$shell_name" in
+  zsh|bash|fish) echo "Tab completion: ccs completion $shell_name --help" ;;
+esac
+
+"$target" --version
