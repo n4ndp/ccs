@@ -1,0 +1,9 @@
+# Never commit credentials or account data.
+*.credentials.json
+.credentials.json
+.claude-accounts/
+credentials.json
+account.json
+__pycache__/
+*.pyc
+.codegraph/
