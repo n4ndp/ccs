@@ -124,6 +124,55 @@ func TestCheckActiveAccountUsesLiveFiles(t *testing.T) {
 	}
 }
 
+func TestCheckNeverSavesDegradedCredentials(t *testing.T) {
+	tests := []struct {
+		name      string
+		written   string
+		wantSaved string
+		wantIn    bool
+	}{
+		{
+			name:      "claude wiped the tokens after a rejected refresh",
+			written:   `{"claudeAiOauth":{"accessToken":"","refreshToken":"","expiresAt":0}}`,
+			wantSaved: `{"claudeAiOauth":{"accessToken":"at-old","refreshToken":"rt-old","expiresAt":1000}}`,
+			wantIn:    false,
+		},
+		{
+			name:      "expiry moved backwards",
+			written:   `{"claudeAiOauth":{"accessToken":"at-x","refreshToken":"rt-x","expiresAt":500}}`,
+			wantSaved: `{"claudeAiOauth":{"accessToken":"at-old","refreshToken":"rt-old","expiresAt":1000}}`,
+			wantIn:    true,
+		},
+		{
+			name:      "successful refresh",
+			written:   `{"claudeAiOauth":{"accessToken":"at-new","refreshToken":"rt-new","expiresAt":2000}}`,
+			wantSaved: `{"claudeAiOauth":{"accessToken":"at-new","refreshToken":"rt-new","expiresAt":2000}}`,
+			wantIn:    true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.saveTwo() // active: personal
+			writeFile(t, filepath.Join(f.store.Paths.Store, "work", credentialsFile),
+				`{"claudeAiOauth":{"accessToken":"at-old","refreshToken":"rt-old","expiresAt":1000}}`)
+			st, err := f.store.Check("work", func(dir string) (claude.Status, error) {
+				writeFile(t, filepath.Join(dir, ".credentials.json"), tt.written)
+				return claude.Status{LoggedIn: true}, nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if st.LoggedIn != tt.wantIn {
+				t.Fatalf("LoggedIn = %v, want %v", st.LoggedIn, tt.wantIn)
+			}
+			if f.savedCreds("work") != compact(t, tt.wantSaved) {
+				t.Fatalf("saved = %s", f.savedCreds("work"))
+			}
+		})
+	}
+}
+
 func TestCheckInactiveAccountUsesCopyAndSavesRefreshedToken(t *testing.T) {
 	f := newFixture(t)
 	f.saveTwo()

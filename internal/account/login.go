@@ -115,13 +115,39 @@ func (s *Store) Check(name string, status func(configDir string) (claude.Status,
 		return claude.Status{}, err
 	}
 	st, statusErr := status(dir)
-	if refreshed, err := os.ReadFile(filepath.Join(dir, ".credentials.json")); err == nil &&
-		json.Valid(refreshed) && !bytes.Equal(refreshed, acc.Credentials) {
+	refreshed, err := os.ReadFile(filepath.Join(dir, ".credentials.json"))
+	if err != nil || bytes.Equal(refreshed, acc.Credentials) {
+		return st, statusErr
+	}
+	after, ok := parseOAuth(refreshed)
+	if !ok || after.AccessToken == "" || after.RefreshToken == "" {
+		// Claude Code wipes the tokens when the server rejects the refresh token.
+		// Keep the saved copy (a transient failure must not destroy it) and report it.
+		st.LoggedIn = false
+		return st, statusErr
+	}
+	if before, _ := parseOAuth(acc.Credentials); after.ExpiresAt >= before.ExpiresAt {
 		if err := s.saveRefreshed(name, acc.UUID(), refreshed); err != nil {
 			return st, err
 		}
 	}
 	return st, statusErr
+}
+
+type oauthTokens struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
+	ExpiresAt    int64  `json:"expiresAt"`
+}
+
+func parseOAuth(raw []byte) (oauthTokens, bool) {
+	var v struct {
+		ClaudeAiOauth *oauthTokens `json:"claudeAiOauth"`
+	}
+	if err := json.Unmarshal(raw, &v); err != nil || v.ClaudeAiOauth == nil {
+		return oauthTokens{}, false
+	}
+	return *v.ClaudeAiOauth, true
 }
 
 func (s *Store) saveRefreshed(name, uuid string, creds []byte) error {
